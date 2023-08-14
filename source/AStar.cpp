@@ -1,8 +1,11 @@
 #include "AStar.hpp"
 #include <algorithm>
+#include <queue>
 #include <math.h>
 
 using namespace std::placeholders;
+
+
 
 bool AStar::Vec2i::operator == (const Vec2i& coordinates_)
 {
@@ -58,6 +61,7 @@ void AStar::Generator::addCollision(Vec2i coordinates_)
 
 void AStar::Generator::removeCollision(Vec2i coordinates_)
 {
+    // 有待优化
     auto it = std::find(walls.begin(), walls.end(), coordinates_);
     if (it != walls.end()) {
         walls.erase(it);
@@ -69,48 +73,78 @@ void AStar::Generator::clearCollisions()
     walls.clear();
 }
 
-AStar::CoordinateList AStar::Generator::findPath(Vec2i source_, Vec2i target_)
-{
-    Node *current = nullptr;
-    NodeSet openSet, closedSet;
-    openSet.reserve(100);
-    closedSet.reserve(100);
-    openSet.push_back(new Node(source_));
-
-    while (!openSet.empty()) {
-        auto current_it = openSet.begin();
-        current = *current_it;
-
-        for (auto it = openSet.begin(); it != openSet.end(); it++) {
-            auto node = *it;
-            if (node->getScore() <= current->getScore()) {
-                current = node;
-                current_it = it;
-            }
+namespace AStar {
+    // 尽量走直线
+    int calcNodeExtraCost(Node* currNode, const Point2i& nextNode, const Point2i& target) {
+        // 第一个点或直线点
+        if (currNode->parent == nullptr || nextNode.x == currNode->parent->coordinates.x
+            || nextNode.y == currNode->parent->coordinates.y) {
+            return 0;
         }
 
+        // 拐向终点的点
+        if (nextNode.x == target.x || nextNode.y == target.y) {
+            return 1;
+        }
+
+        // 普通拐点
+        return 2;
+    }
+};
+
+AStar::uint AStar::Generator::getWeights(const Point2i& pos) const {
+    auto it = weights_.find(pos);
+    return it == weights_.end() ? DEFAULT_WEIGHT : it->second;
+}
+void AStar::Generator::setWeights(const Point2i& pos, uint weight) {
+    weights_[pos] = weight;
+}
+
+
+AStar::CoordinateList AStar::Generator::findPath(Vec2i source_, Vec2i target_)
+{
+    Node *current = nullptr;    
+    
+    auto nodeComp = [](Node* a, Node* b) {
+        return a->getScore() > b->getScore();
+    };
+    // 定义优先队列，按f值从小到大排序; 小顶堆
+    std::priority_queue<Node*, std::vector<Node*>, std::function<bool(Node*, Node*)>> openQueue(nodeComp);
+    
+    auto setComp = [](Node* a, Node* b) {
+        return b->coordinates < a->coordinates;
+    };
+    NodeSet closedSet(setComp);
+    NodeSet openSet(setComp);
+    openQueue.push(new Node(source_));
+
+    while (!openQueue.empty()) {
+        current = openQueue.top();
         if (current->coordinates == target_) {
             break;
         }
 
-        closedSet.push_back(current);
-        openSet.erase(current_it);
+        closedSet.insert(current);
+        openSet.erase(current);
+        openQueue.pop();
 
         for (uint i = 0; i < directions; ++i) {
             Vec2i newCoordinates(current->coordinates + direction[i]);
             if (detectCollision(newCoordinates) ||
-                findNodeOnList(closedSet, newCoordinates)) {
+                findNodeOnList(closedSet, newCoordinates) != nullptr) {
                 continue;
             }
-
-            uint totalCost = current->G + ((i < 4) ? 10 : 14);
+            
+            uint totalCost = current->G + ((i < 4) ? 10 : 14) * getWeights(newCoordinates) 
+                            + (directPrefer ? 10 * calcNodeExtraCost(current, newCoordinates, target_) : 0);
 
             Node *successor = findNodeOnList(openSet, newCoordinates);
             if (successor == nullptr) {
                 successor = new Node(newCoordinates, current);
                 successor->G = totalCost;
                 successor->H = heuristic(successor->coordinates, target_);
-                openSet.push_back(successor);
+                openQueue.push(successor);
+                openSet.insert(successor);
             }
             else if (totalCost < successor->G) {
                 successor->parent = current;
@@ -125,20 +159,23 @@ AStar::CoordinateList AStar::Generator::findPath(Vec2i source_, Vec2i target_)
         current = current->parent;
     }
 
-    releaseNodes(openSet);
+    while (!openQueue.empty())
+    {
+        delete openQueue.top();
+        openQueue.pop();
+    }
     releaseNodes(closedSet);
 
     return path;
 }
 
+
+
 AStar::Node* AStar::Generator::findNodeOnList(NodeSet& nodes_, Vec2i coordinates_)
 {
-    for (auto node : nodes_) {
-        if (node->coordinates == coordinates_) {
-            return node;
-        }
-    }
-    return nullptr;
+    Node node(coordinates_);
+    auto it = nodes_.find(&node);
+    return it == nodes_.end() ? nullptr : *it;
 }
 
 void AStar::Generator::releaseNodes(NodeSet& nodes_)

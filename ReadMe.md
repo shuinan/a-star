@@ -28,3 +28,8 @@ int main()
 #### Preview
 ![](http://i.imgur.com/rqvrs6G.png)
 ![](http://i.imgur.com/7ZH2A0d.png)
+
+
+使用优先队列/ set 替代原来的数据结构，速度飙升。 目前debug模式下， 240/240 寻路，643ms
+
+https://blog.csdn.net/wenyuan65/article/details/81587768  这篇文章有启发

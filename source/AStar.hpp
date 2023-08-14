@@ -9,15 +9,19 @@
 #include <vector>
 #include <functional>
 #include <set>
+#include <unordered_map>
+#include <map>
 
 namespace AStar
-{
+{    
     struct Vec2i
     {
         int x, y;
 
         bool operator == (const Vec2i& coordinates_);
+        bool operator < (const Vec2i& dest) const { return  x == dest.x ? y < dest.y : x < dest.x; }
     };
+    typedef Vec2i  Point2i;
 
     using uint = unsigned int;
     using HeuristicFunction = std::function<uint(Vec2i, Vec2i)>;
@@ -33,7 +37,15 @@ namespace AStar
         uint getScore();
     };
 
-    using NodeSet = std::vector<Node*>;
+    using NodeSet = std::set<Node*, std::function<bool(Node*, Node*)>>;
+    
+    struct classcomp {
+        bool operator() (const int& lhs, const int& rhs) const
+        {
+            return lhs<rhs;
+        }
+    };
+
 
     class Generator
     {
@@ -51,11 +63,20 @@ namespace AStar
         void removeCollision(Vec2i coordinates_);
         void clearCollisions();
 
+        uint getWeights(const Point2i& pos) const;
+        void setWeights(const Point2i& pos, uint weight);
+
+        void setDirectPrefer(bool f) { directPrefer = f; }
+
     private:
         HeuristicFunction heuristic;
         CoordinateList direction, walls;
         Vec2i worldSize;
         uint directions;
+        bool directPrefer = true;           // 是否优先走直线
+        const uint DEFAULT_WEIGHT = 10;
+        // 保存个点的权值，如果不在里面，就认为是缺省值：10；
+        std::map<Point2i, uint> weights_;
     };
 
     class Heuristic
@@ -64,7 +85,9 @@ namespace AStar
 
     public:
         static uint manhattan(Vec2i source_, Vec2i target_);
+        // 欧几里得
         static uint euclidean(Vec2i source_, Vec2i target_);
+        // 对角线
         static uint octagonal(Vec2i source_, Vec2i target_);
     };
 }
