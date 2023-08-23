@@ -8,12 +8,24 @@ int main()
     auto start = std::chrono::high_resolution_clock::now();
 
     AStar::Generator generator;
-    generator.setWorldSize({250, 250});
     generator.setHeuristic(AStar::Heuristic::euclidean);
     generator.setDiagonalMovement(false);
+    
+    AStar::Map& map = generator.getMap();
+    map.setWorldSize({2500, 2500});
+    map.addCollision({0, 4});
+    map.addCollision({4, 0});
+    map.addPath({{2,3}, {7,3}});
+
+    for(int i=0; i<2400; ++i) {
+        map.setWeights({i, 2}, 1);
+    }
+    for(int i=0; i<2400; ++i) {
+        map.setWeights({2300, i}, 1);
+    }
 
     std::cout << "Generate path ... \n";
-    auto path = generator.findPath({0, 0}, {240, 240});
+    auto path = generator.findPath({0, 0}, {2400, 2400});
 
     for(auto& coordinate : path) {
         std::cout << coordinate.x << " " << coordinate.y << "\n";
