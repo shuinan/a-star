@@ -12,19 +12,19 @@
 
 #include <assert.h>
 
+/// @brief 基础的jps算法需要走斜线
+/// 考虑到我们有管廊/管网这一类捷径，可以贪心的方式直接走下去
+/// 如果有空切的地方，直线扫描方式来定位, 朝向终点，前后上下直线搜索
+/// ? 并找到边界点作为跳点
 namespace AStar
 {    
     struct Vec2i
     {
         int x, y;
 
-        Vec2i operator + (const Vec2i& right_) const
-        {
-            return{ x + right_.x, y + right_.y };
-        }
-        bool operator == (const Vec2i& coordinates_) const {
-            return (x == coordinates_.x && y == coordinates_.y);
-        }
+        Vec2i operator + (const Vec2i& right_) const { return{ x + right_.x, y + right_.y }; }
+        Vec2i operator - (const Vec2i& right_) const { return{ x - right_.x, y - right_.y }; }
+        bool operator == (const Vec2i& coordinates_) const { return (x == coordinates_.x && y == coordinates_.y); }
         bool operator < (const Vec2i& dest) const { return  x == dest.x ? y < dest.y : x < dest.x; }
     };
     typedef Vec2i  Point2i;
@@ -73,24 +73,50 @@ namespace AStar
         }
     };
     
+    /// @brief map
     class Map {
     public:
-        bool detectCollision(const Point2i& nextCoord, const Point2i& curCoord) {            
-            if (nextCoord.x < 0 || nextCoord.x >= worldSize.x ||
-                nextCoord.y < 0 || nextCoord.y >= worldSize.y) {
-                if (walls.find(nextCoord) != walls.end()) 
-                    return false;
-
-                if (curCoord == nextCoord) 
-                    return true;
-                if (paths.find(curCoord) != paths.end() &&  paths.find(nextCoord) != paths.end())
-                    return false;
-
+        typedef std::pair<Point2i, Point2i> Bridge;
+        
+    public:
+        bool baseCollision(const Point2i& nextCoord) {            
+            return  (nextCoord.x < 0 || nextCoord.x >= worldSize.x ||
+                     nextCoord.y < 0 || nextCoord.y >= worldSize.y) ||
+                     walls.find(nextCoord) != walls.end();
+        }
+        bool detectCollision(const Point2i& nextCoord, const Point2i& curCoord) {
+            if (baseCollision(nextCoord))
                 return true;
-            }
+            if (walls.find(nextCoord) != walls.end())
+                return true;
+            if (curCoord == nextCoord)
+                return true;
+            if (paths.find(curCoord) != paths.end() && paths.find(nextCoord) != paths.end())
+                return false;
+
             return false;
         }
 
+        const int BridgeCost = 1;
+        int addBridge(const Point2i& start, const Point2i& end) {
+            // only vertical or horizen
+            if (start.x == end.x) {
+                int dir = start.y > end.y ? -1 : 1;
+                for (int pos = 0; pos <= abs(start.y - end.y); pos++) {
+                    weights_[{end.y, start.y + dir}] = BridgeCost;
+                }
+            } 
+            else if (start.y == end.y) {
+                int dir = start.x > end.x ? -1 : 1;
+                for (int pos = 0; pos <= abs(start.x - end.x); pos++) {
+                    weights_[{start.x+dir, end.y}] = BridgeCost;
+                }
+            }
+
+            bridges[++bridgeId] = std::pair<Point2i, Point2i>(start, end);
+            return bridgeId;
+        }
+        
         /// @brief add a path which is composed by multi-segment
         /// @param path 
         void addPath(const std::vector<Point2i>& path) {
@@ -131,11 +157,13 @@ namespace AStar
         // 有待优化, 使用set节省空间，但是查找速度略慢      下面记录的都是点阵
         std::set<Point2i>   walls;
         std::set<Point2i>   paths;      // 如果规划多条线路，线路可以交叉，但是不可以有重复的段
+        std::map<int, Bridge> bridges;
+        int bridgeId = 0;
         Vec2i               worldSize;
 
         const uint DEFAULT_WEIGHT = 10;
         // 保存个点的权值，如果不在里面，就认为是缺省值：10；
-        std::map<Point2i, uint> weights_;
+        std::map<Point2i, uint> weights_;       
     };
 
     class Generator
@@ -160,7 +188,38 @@ namespace AStar
         void setDirectPrefer(bool f) { directPrefer = f; }
         void setHeuristic(HeuristicFunction heuristic_) { heuristic = heuristic_; }
 
+        bool isBridge(const Point2i& pt) { return map_.getWeights(pt) == 1; }
 
+        /// @brief 目前的模式，有重复检测的问题，另外baseCollision效率太低了； 
+        /// 后面考虑预处理的方式，把跳点先检测出来
+        /// @param current 
+        /// @param dir 
+        /// @param jp 
+        /// @return 
+        bool findJumpPoint(Node* current, const Vec2i& dir, Point2i& jp) {
+            return false;
+            jp = current->coordinates + dir;
+            while (true)
+            {                
+                if (map_.baseCollision(jp)) {
+                    break;
+                }
+
+                /// if jump piont, 点或者矩形的四角斜方向的点，认为是跳点 
+                Vec2i vertical({dir.y, dir.x});
+                if ((!map_.baseCollision(jp + dir) && !map_.baseCollision(jp + vertical) && map_.baseCollision(jp + dir + vertical)) ||
+                    (!map_.baseCollision(jp + dir) && !map_.baseCollision(jp - vertical) && map_.baseCollision(jp + dir - vertical)) ||
+                    (!map_.baseCollision(jp + vertical) && map_.baseCollision(jp - dir + vertical)) ||
+                    (!map_.baseCollision(jp - vertical) && map_.baseCollision(jp - dir - vertical)) 
+                )
+                    return true; 
+
+                jp = jp + dir;
+            };
+            
+            return false;
+        }
+        
         CoordinateList findPath(Vec2i source_, Vec2i target_) {
             Node* current = nullptr;
 
@@ -177,37 +236,67 @@ namespace AStar
             NodeSet openSet(setComp);
             openQueue.push(new Node(source_));
 
+            auto addNextPoint = [&](uint i, const Point2i& next) ->bool {
+                assert(current != nullptr);
+
+                if (map_.detectCollision(next, current->coordinates) ||
+                    findNodeOnList(closedSet, next) != nullptr) {
+                    return false;
+                }
+
+                uint totalCost = current->G + ((i < 4) ? 10 : 14) * map_.getWeights(next)
+                    + (directPrefer ? 10 * calcNodeExtraCost(current, next, target_) : 0);
+
+                Node* successor = findNodeOnList(openSet, next);
+                if (successor == nullptr) {
+                    successor = new Node(next, current);
+                    successor->G = totalCost;
+                    successor->H = heuristic(successor->coordinates, target_);
+                    openQueue.push(successor);
+                    openSet.insert(successor);
+                }
+                else if (totalCost < successor->G) {
+                    successor->parent = current;
+                    successor->G = totalCost;
+                }
+                return true;
+            };
+
             while (!openQueue.empty()) {
                 current = openQueue.top();
                 if (current->coordinates == target_) {
                     break;
                 }
-
+                
                 closedSet.insert(current);
                 openSet.erase(current);
                 openQueue.pop();
 
-                for (uint i = 0; i < directions; ++i) {
+                for (uint i = 0; i < directions; ++i) {                    
                     Vec2i nextCoord(current->coordinates + direction[i]);
-                    if (map_.detectCollision(nextCoord, current->coordinates) ||
-                        findNodeOnList(closedSet, nextCoord) != nullptr) {
-                        continue;
-                    }
+                    if (isBridge(current->coordinates)) {
+                        while (isBridge(nextCoord)) {                            
+                            // find end point or cross point
+                            if (!isBridge(nextCoord) ||
+                                isBridge({nextCoord.x + direction[i].y, nextCoord.y + direction[i].x}) ||
+                                isBridge({nextCoord.x - direction[i].y, nextCoord.y - direction[i].x})) {
+                                break;
+                            }
 
-                    uint totalCost = current->G + ((i < 4) ? 10 : 14) * map_.getWeights(nextCoord)
-                        + (directPrefer ? 10 * calcNodeExtraCost(current, nextCoord, target_) : 0);
+                            nextCoord = nextCoord + direction[i];
+                        }
 
-                    Node* successor = findNodeOnList(openSet, nextCoord);
-                    if (successor == nullptr) {
-                        successor = new Node(nextCoord, current);
-                        successor->G = totalCost;
-                        successor->H = heuristic(successor->coordinates, target_);
-                        openQueue.push(successor);
-                        openSet.insert(successor);
-                    }
-                    else if (totalCost < successor->G) {
-                        successor->parent = current;
-                        successor->G = totalCost;
+                        addNextPoint(i, nextCoord);
+                        continue;                             
+                    }                    
+
+                    // find jp(jump point)
+                    Point2i jp;
+                    bool haveJp = findJumpPoint(current, direction[i], jp);
+                    if (haveJp) {
+                        addNextPoint(i, jp);
+                    } else {
+                       addNextPoint(i, nextCoord);                       
                     }
                 }
             }
