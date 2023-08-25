@@ -4,7 +4,6 @@
 
 int main()
 {    
-     // 获取当前时间�?
     auto start = std::chrono::high_resolution_clock::now();
 
     AStar::Generator generator;
@@ -15,6 +14,7 @@ int main()
     map.setWorldSize({2500, 2500});
     map.addCollision({0, 4});
     map.addCollision({4, 0});
+//    map.addCollisionLine({4, 10}, {4, 1000});
     map.addPath({{2,3}, {7,3}});
 
     for(int i=0; i<2400; ++i) {
@@ -32,10 +32,7 @@ int main()
     }
 
 
-    // 获取当前时间�?
     auto end = std::chrono::high_resolution_clock::now();
-    // 计算函数执�?�的时间
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    // 输出执�?�时间（以�??秒为单位�?
     std::cout << "time: " << duration.count() / 1000.0 << " ms" << std::endl;
 }

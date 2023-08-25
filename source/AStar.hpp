@@ -22,8 +22,12 @@ namespace AStar
     {
         int x, y;
 
+        Vec2i() : x(0), y(0) {}
+        Vec2i(int x0, int y0) : x(x0), y(y0) {}
+
         Vec2i operator + (const Vec2i& right_) const { return{ x + right_.x, y + right_.y }; }
         Vec2i operator - (const Vec2i& right_) const { return{ x - right_.x, y - right_.y }; }
+        Vec2i& operator -= (const Vec2i& right_) { x -= right_.x; y -= right_.y; return *this; }
         bool operator == (const Vec2i& coordinates_) const { return (x == coordinates_.x && y == coordinates_.y); }
         bool operator < (const Vec2i& dest) const { return  x == dest.x ? y < dest.y : x < dest.x; }
     };
@@ -80,18 +84,18 @@ namespace AStar
         
     public:
         bool baseCollision(const Point2i& nextCoord) {            
-            return  (nextCoord.x < 0 || nextCoord.x >= worldSize.x ||
-                     nextCoord.y < 0 || nextCoord.y >= worldSize.y) ||
-                     walls.find(nextCoord) != walls.end();
+            return  (nextCoord.x < 0 || nextCoord.x >= worldSize_.x ||
+                     nextCoord.y < 0 || nextCoord.y >= worldSize_.y) ||
+                     walls_.find(nextCoord) != walls_.end();
         }
         bool detectCollision(const Point2i& nextCoord, const Point2i& curCoord) {
             if (baseCollision(nextCoord))
                 return true;
-            if (walls.find(nextCoord) != walls.end())
+            if (walls_.find(nextCoord) != walls_.end())
                 return true;
             if (curCoord == nextCoord)
                 return true;
-            if (paths.find(curCoord) != paths.end() && paths.find(nextCoord) != paths.end())
+            if (paths_.find(curCoord) != paths_.end() && paths_.find(nextCoord) != paths_.end())
                 return false;
 
             return false;
@@ -113,8 +117,8 @@ namespace AStar
                 }
             }
 
-            bridges[++bridgeId] = std::pair<Point2i, Point2i>(start, end);
-            return bridgeId;
+            bridges_[++bridgeId_] = std::pair<Point2i, Point2i>(start, end);
+            return bridgeId_;
         }
         
         /// @brief add a path which is composed by multi-segment
@@ -123,20 +127,8 @@ namespace AStar
             if (path.size() < 2) {
                 return;
             }
-            for(uint32_t i=1; i<path.size(); ++i) {
-                // only vertical or horizen
-                if (path[i-1].x == path[i].x) {
-                    int dir = path[i-1].y > path[i].y ? -1 : 1;
-                    for (int pos = 0; pos <= abs(path[i-1].y - path[i].y); pos++) {
-                        paths.insert({path[i].y, path[i-1].y + dir});
-                    }
-                } 
-                else if (path[i-1].y == path[i].y) {
-                    int dir = path[i-1].x > path[i].x ? -1 : 1;
-                    for (int pos = 0; pos <= abs(path[i-1].x - path[i].x); pos++) {
-                        paths.insert({path[i-1].x+dir, path[i].y});
-                    }
-                }
+            for (uint32_t i = 1; i < path.size(); ++i) {
+                addDirectLine(path[i - 1], path[i], paths_);
             }
         }
 
@@ -148,18 +140,80 @@ namespace AStar
             costs_[pos] = cost;
         }
 
-        void setWorldSize(Vec2i worldSize_) { worldSize = worldSize_; };
-        void addCollision(const Point2i& coordinates_) { walls.insert(coordinates_); }
-        void removeCollision(const Point2i& coordinates_) { walls.erase(coordinates_); }
-        void clearCollisions() { walls.clear(); }
+        void setWorldSize(Vec2i size) { worldSize_ = size; };
+        /// @brief set worldsize by current walls, with extra w,h; will modify all position of current data
+        /// @param ew    extra width
+        /// @param eh    extra height
+        Vec2i align(int ew, int eh) {
+            Point2i lbPoint({100000, 100000}), rtPoint({-100000, -100000});
+            for (auto& wall : walls_) {
+                lbPoint.x = std::min(lbPoint.x, wall.x);
+                rtPoint.x = std::max(rtPoint.x, wall.x);
+                lbPoint.y = std::min(lbPoint.y, wall.y);
+                rtPoint.y = std::max(rtPoint.y, wall.y);
+            }
+            lbPoint.x -= ew; rtPoint.x += ew;
+            lbPoint.y -= eh; rtPoint.y += eh;
+
+            worldSize_.x = rtPoint.x - lbPoint.x;
+            worldSize_.y = rtPoint.y - lbPoint.y;
+
+            auto tempWall = std::move(walls_);            
+            for(auto wall : tempWall) {
+                walls_.insert(wall -= lbPoint);
+            }
+            auto tempPath = std::move(paths_);
+            for(auto path : tempPath) {
+                paths_.insert(path -= lbPoint);
+            }
+            for(auto& it : bridges_) {
+                it.second.first -= lbPoint;
+                it.second.second -= lbPoint;
+            }
+
+            auto temp = std::move(costs_);
+            for(auto& it : temp) {
+                costs_[it.first - lbPoint] = it.second;
+            }
+
+            return lbPoint;
+        }
+        void addCollision(const Point2i& coordinates) { walls_.insert(coordinates); }
+        /// @brief add a direct line
+        void addCollisionLine(const Point2i& from, const Point2i& to) { addDirectLine(from, to, walls_); }
+        void addCollisionRect(const Point2i& from, const Point2i& to) { 
+            addDirectLine(from, {from.x, to.y}, walls_); 
+            addDirectLine(from, {from.y, to.x}, walls_); 
+            addDirectLine(to, {to.x, from.y}, walls_); 
+            addDirectLine(to, {to.y, from.x}, walls_); 
+        }
+        void removeCollision(const Point2i& coordinates) { walls_.erase(coordinates); }
+        void clearCollisions() { walls_.clear(); }
 
     private:
+        template<class Container>
+        void addDirectLine(const Point2i& from, const Point2i& to, Container& c) {
+            // only vertical or horizen
+            if (from.x == to.x) {
+                int dir = from.y > to.y ? -1 : 1;
+                for (int pos = 0; pos <= abs(from.y - to.y); pos++) {
+                    c.insert({ to.y, from.y + dir });
+                }
+            }
+            else if (from.y == to.y) {
+                int dir = from.x > to.x ? -1 : 1;
+                for (int pos = 0; pos <= abs(from.x - to.x); pos++) {
+                    c.insert({ from.x + dir, to.y });
+                }
+            }
+        }
+    private:
         // 有待优化, 使用set节省空间，但是查找速度略慢      下面记录的都是点阵
-        std::set<Point2i>   walls;
-        std::set<Point2i>   paths;      // 如果规划多条线路，线路可以交叉，但是不可以有重复的段
-        std::map<int, Bridge> bridges;
-        int bridgeId = 0;
-        Vec2i               worldSize;
+        std::set<Point2i>   walls_;
+        std::set<Point2i>   paths_;      // 如果规划多条线路，线路可以交叉，但是不可以有重复的段
+        std::map<int, Bridge> bridges_;
+        int bridgeId_ = 0;
+        Vec2i               worldSize_;
 
         const uint DEFAULT_COST = 10;
         // 保存个点的权值，如果不在里面，就认为是缺省值：10；
