@@ -103,13 +103,13 @@ namespace AStar
             if (start.x == end.x) {
                 int dir = start.y > end.y ? -1 : 1;
                 for (int pos = 0; pos <= abs(start.y - end.y); pos++) {
-                    weights_[{end.y, start.y + dir}] = BridgeCost;
+                    costs_[{end.y, start.y + dir}] = BridgeCost;
                 }
             } 
             else if (start.y == end.y) {
                 int dir = start.x > end.x ? -1 : 1;
                 for (int pos = 0; pos <= abs(start.x - end.x); pos++) {
-                    weights_[{start.x+dir, end.y}] = BridgeCost;
+                    costs_[{start.x+dir, end.y}] = BridgeCost;
                 }
             }
 
@@ -140,12 +140,12 @@ namespace AStar
             }
         }
 
-        uint getWeights(const Point2i& pos) const {
-            auto it = weights_.find(pos);
-            return it == weights_.end() ? DEFAULT_WEIGHT : it->second;
+        uint getCost(const Point2i& pos) const {
+            auto it = costs_.find(pos);
+            return it == costs_.end() ? DEFAULT_COST : it->second;
         }
-        void setWeights(const Point2i& pos, uint weight) {
-            weights_[pos] = weight;
+        void setCost(const Point2i& pos, uint cost) {
+            costs_[pos] = cost;
         }
 
         void setWorldSize(Vec2i worldSize_) { worldSize = worldSize_; };
@@ -161,9 +161,9 @@ namespace AStar
         int bridgeId = 0;
         Vec2i               worldSize;
 
-        const uint DEFAULT_WEIGHT = 10;
+        const uint DEFAULT_COST = 10;
         // 保存个点的权值，如果不在里面，就认为是缺省值：10；
-        std::map<Point2i, uint> weights_;       
+        std::map<Point2i, uint> costs_;       
     };
 
     class Generator
@@ -188,7 +188,7 @@ namespace AStar
         void setDirectPrefer(bool f) { directPrefer = f; }
         void setHeuristic(HeuristicFunction heuristic_) { heuristic = heuristic_; }
 
-        bool isBridge(const Point2i& pt) { return map_.getWeights(pt) == 1; }
+        bool isBridge(const Point2i& pt) { return map_.getCost(pt) == 1; }
 
         /// @brief 目前的模式，有重复检测的问题，另外baseCollision效率太低了； 
         /// 后面考虑预处理的方式，把跳点先检测出来
@@ -244,7 +244,7 @@ namespace AStar
                     return false;
                 }
 
-                uint totalCost = current->G + ((i < 4) ? 10 : 14) * map_.getWeights(next)
+                uint totalCost = current->G + ((i < 4) ? 10 : 14) * map_.getCost(next)
                     + (directPrefer ? 10 * calcNodeExtraCost(current, next, target_) : 0);
 
                 Node* successor = findNodeOnList(openSet, next);

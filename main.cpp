@@ -4,7 +4,7 @@
 
 int main()
 {    
-     // 获取当前时间点
+     // 获取当前时间�?
     auto start = std::chrono::high_resolution_clock::now();
 
     AStar::Generator generator;
@@ -18,10 +18,10 @@ int main()
     map.addPath({{2,3}, {7,3}});
 
     for(int i=0; i<2400; ++i) {
-        map.setWeights({i, 2}, 1);
+        map.setCost({i, 2}, 1);
     }
     for(int i=0; i<2400; ++i) {
-        map.setWeights({2300, i}, 1);
+        map.setCost({2300, i}, 1);
     }
 
     std::cout << "Generate path ... \n";
@@ -32,10 +32,10 @@ int main()
     }
 
 
-    // 获取当前时间点
+    // 获取当前时间�?
     auto end = std::chrono::high_resolution_clock::now();
-    // 计算函数执行的时间
+    // 计算函数执�?�的时间
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    // 输出执行时间（以毫秒为单位）
+    // 输出执�?�时间（以�??秒为单位�?
     std::cout << "time: " << duration.count() / 1000.0 << " ms" << std::endl;
 }
