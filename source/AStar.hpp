@@ -355,10 +355,19 @@ namespace AStar
                 }
             }
 
-            CoordinateList path;
+            CoordinateList path, oriPath;
             while (current != nullptr) {
-                path.push_back(current->coordinates);
+                oriPath.push_back(current->coordinates);
                 current = current->parent;
+            }
+            if (oriPath.size() > 2) {
+                path.push_back(oriPath[0]);
+                for(int i=2; i< oriPath.size(); ++i) {
+                    if (oriPath[i].x != oriPath[i-2].x && oriPath[i].y != oriPath[i-2].y) {
+                        path.push_back(oriPath[i-1]);
+                    }
+                }
+                path.push_back(oriPath[oriPath.size()-1]);
             }
 
             while (!openQueue.empty())
