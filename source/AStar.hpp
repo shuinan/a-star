@@ -18,7 +18,7 @@
 /// 如果有空切的地方，直线扫描方式来定位, 朝向终点，前后上下直线搜索
 /// ? 并找到边界点作为跳点
 namespace AStar
-{    
+{
     using uint = unsigned int;
 
     struct Vec2i
@@ -26,8 +26,8 @@ namespace AStar
         int x, y;
 
         Vec2i() : x(0), y(0) {}
-        Vec2i(int x0, int y0) : x(x0), y(y0) {}        
-        
+        Vec2i(int x0, int y0) : x(x0), y(y0) {}
+
         Vec2i operator + (const Vec2i& right_) const { return{ x + right_.x, y + right_.y }; }
         Vec2i operator - (const Vec2i& right_) const { return{ x - right_.x, y - right_.y }; }
         Vec2i& operator += (const Vec2i& right_) { x += right_.x; y += right_.y; return *this; }
@@ -39,7 +39,7 @@ namespace AStar
     };
     typedef Vec2i  Point2i;
 
-    
+
     using HeuristicFunction = std::function<uint(Vec2i, Vec2i)>;
     using CoordinateList = std::vector<Vec2i>;
 
@@ -98,7 +98,7 @@ namespace AStar
         static const int MAX_WORLD_LEN = 100000;
     public:
         Map() : baseAlignPoint_({ 0,0 }) {}
-                
+
         bool baseCollision(const Point2i& nextCoord) {
             return  nextCoord.x < 0 || nextCoord.x >= worldSize_.x ||
                 nextCoord.y < 0 || nextCoord.y >= worldSize_.y ||
@@ -160,10 +160,10 @@ namespace AStar
         bool findJumpPoint(const Point2i& current, const Vec2i& dir, Point2i& jp) {
             int dis = MAX_WORLD_LEN;
             for (auto jumpPoint : jumpPoints_) {
-                Vec2i curDir = jumpPoint - current;                
-                if(dir.x == 0 || dir.y == 0) {
+                Vec2i curDir = jumpPoint - current;
+                if (dir.x == 0 || dir.y == 0) {
                     // 射线搜索
-                    if ((curDir.x == 0 || curDir.y == 0) && (curDir.x*dir.x >0 || curDir.y * dir.y > 0)) {
+                    if ((curDir.x == 0 || curDir.y == 0) && (curDir.x * dir.x > 0 || curDir.y * dir.y > 0)) {
                         if (isCollision(current, jumpPoint))
                             continue;
                         if (std::abs(curDir.x) + std::abs(curDir.y) < dis) {
@@ -171,7 +171,7 @@ namespace AStar
                             jp = jumpPoint;
                         }
                     }
-                }   
+                }
                 // 从4斜边方向搜索小区域
                 else if (curDir.x * dir.x > 0 && curDir.y * dir.y > 0) {
                     // 只要这两点之间无障碍就可以
@@ -181,7 +181,7 @@ namespace AStar
                         dis = std::abs(curDir.x) + std::abs(curDir.y);
                         jp = jumpPoint;
                     }
-                }                
+                }
             }
 
             return dis != MAX_WORLD_LEN;
@@ -193,19 +193,19 @@ namespace AStar
 
             int dis = MAX_WORLD_LEN;
             for (const auto& bridge : bridges_) {
-                if (dir.x != 0) {                    
+                if (dir.x != 0) {
                     if (bridge.second.start.x != bridge.second.end.x) {
                         continue;
                     }
-                    if ((bridge.second.start.x - current.x)*dir.x < 0) {
+                    if ((bridge.second.start.x - current.x) * dir.x < 0) {
                         continue;
                     }
                     // 中间不能有障碍点                    
-                    if (isCollision(current, { bridge.second.start.x, current.y })) {                    
+                    if (isCollision(current, { bridge.second.start.x, current.y })) {
                         continue;
                     }
                     if (current.y >= bridge.second.start.y && current.y <= bridge.second.end.y) {
-                        if (dis > std::abs(bridge.second.start.x - current.x)) {                            
+                        if (dis > std::abs(bridge.second.start.x - current.x)) {
                             jp.x = bridge.second.start.x, jp.y = current.y;
                             dis = std::abs(jp.x - current.x);
                         }
@@ -219,7 +219,7 @@ namespace AStar
                         continue;
                     }
                     // 中间不能有障碍点                    
-                    if (isCollision(current, { current.x, bridge.second.start.y})) {
+                    if (isCollision(current, { current.x, bridge.second.start.y })) {
                         continue;
                     }
                     if (current.x >= bridge.second.start.x && current.x <= bridge.second.end.x) {
@@ -232,14 +232,14 @@ namespace AStar
             }
             return dis != MAX_WORLD_LEN;
         }
-        
+
         void preJumpPointSearch() {
             jumpPoints_.clear();
 
             // 四角斜对外点，认为是跳点（和jps里面可以走斜线的方式不同)
             Point2i jp;
             for (auto pt : walls_) {
-                if (!baseCollision(pt + Vec2i(-1, 0)) && !baseCollision(pt + Vec2i(-1, -1)) && !baseCollision(pt + Vec2i(0, -1)) ) {
+                if (!baseCollision(pt + Vec2i(-1, 0)) && !baseCollision(pt + Vec2i(-1, -1)) && !baseCollision(pt + Vec2i(0, -1))) {
                     jp = { pt + Vec2i(-1, -1) };
                     jumpPoints_.insert(jp);
                 }
@@ -257,9 +257,9 @@ namespace AStar
                 }
                 else {
                     continue;
-                }               
+                }
             }
-            
+
             if (1) {
                 for (auto bridge : bridges_) {
                     jumpPoints_.insert(bridge.second.start);
@@ -271,28 +271,28 @@ namespace AStar
             preJumpPointSearch();
             jumpPoints_.insert(target);
         }
-                
+
         int addBridge(const Point2i& start, const Point2i& end) {
             // only vertical or horizen
             if (start.x == end.x) {
                 int dir = start.y > end.y ? -1 : 1;
                 for (int pos = 0; pos <= abs(start.y - end.y); pos++) {
-                    costs_[{end.x, start.y + dir*pos}] = BRIDGE_COST;
+                    costs_[{end.x, start.y + dir * pos}] = BRIDGE_COST;
                 }
                 bridges_[++bridgeId_] = start.y < end.y ? Bridge({ start, end }) : Bridge({ end, start });
-            } 
+            }
             else if (start.y == end.y) {
                 int dir = start.x > end.x ? -1 : 1;
                 for (int pos = 0; pos <= abs(start.x - end.x); pos++) {
-                    costs_[{start.x+dir*pos, end.y}] = BRIDGE_COST;
+                    costs_[{start.x + dir * pos, end.y}] = BRIDGE_COST;
                 }
                 bridges_[++bridgeId_] = start.x < end.x ? Bridge({ start, end }) : Bridge({ end, start });
             }
-                        
+
             return bridgeId_;
         }
         bool isBridge(const Point2i& pt) const { return getCost(pt) == BRIDGE_COST; }
-        
+
         /// @brief add a path which is composed by multi-segment
         /// @param path 
         void addPath(const std::vector<Point2i>& path) {
@@ -313,16 +313,23 @@ namespace AStar
         }
 
         void setWorldSize(Vec2i size) { worldSize_ = size; };
+        void range(const Point2i& pt, Point2i& lbPoint, Point2i& rtPoint) {
+            lbPoint.x = std::min(lbPoint.x, pt.x);
+            rtPoint.x = std::max(rtPoint.x, pt.x);
+            lbPoint.y = std::min(lbPoint.y, pt.y);
+            rtPoint.y = std::max(rtPoint.y, pt.y);
+        }
         /// @brief set worldsize by current walls, with extra w,h; will modify all position of current data
         /// @param ew    extra width
         /// @param eh    extra height
         Vec2i align(int ew, int eh) {
-            Point2i lbPoint({100000, 100000}), rtPoint({-100000, -100000});
+            Point2i lbPoint({ 100000, 100000 }), rtPoint({ -100000, -100000 });
             for (auto& wall : walls_) {
-                lbPoint.x = std::min(lbPoint.x, wall.x);
-                rtPoint.x = std::max(rtPoint.x, wall.x);
-                lbPoint.y = std::min(lbPoint.y, wall.y);
-                rtPoint.y = std::max(rtPoint.y, wall.y);
+                range(wall, lbPoint, rtPoint);
+            }
+            for (auto b : bridges_) {
+                range(b.second.start, lbPoint, rtPoint);
+                range(b.second.end, lbPoint, rtPoint);
             }
             lbPoint.x -= ew; rtPoint.x += ew;
             lbPoint.y -= eh; rtPoint.y += eh;
@@ -330,8 +337,8 @@ namespace AStar
             worldSize_.x = rtPoint.x - lbPoint.x;
             worldSize_.y = rtPoint.y - lbPoint.y;
 
-            auto tempWall = std::move(walls_);            
-            for(auto wall : tempWall) {
+            auto tempWall = std::move(walls_);
+            for (auto wall : tempWall) {
                 walls_.insert(wall -= lbPoint);
             }
             for (auto& seg : wallLines_) {
@@ -346,30 +353,30 @@ namespace AStar
                 ySortWallLines.insert(seg.move(lbPoint));
             }
             auto tempPath = std::move(paths_);
-            for(auto path : tempPath) {
+            for (auto path : tempPath) {
                 paths_.insert(path -= lbPoint);
             }
-            for(auto& it : bridges_) {
+            for (auto& it : bridges_) {
                 it.second.move(lbPoint);
             }
 
             auto temp = std::move(costs_);
-            for(auto& it : temp) {
+            for (auto& it : temp) {
                 costs_[it.first - lbPoint] = it.second;
             }
-            
+
             baseAlignPoint_ = lbPoint;
 
             return lbPoint;
         }
-        void addCollision(const Point2i& pt) { walls_.insert(pt); wallLines_.push_back({pt, pt}); } 
+        void addCollision(const Point2i& pt) { walls_.insert(pt); wallLines_.push_back({ pt, pt }); }
         /// @brief add a direct line
         void addCollisionLine(const Point2i& from, const Point2i& to) { addDirectLine(from, to, walls_); }
-        void addCollisionRect(const Point2i& from, const Point2i& to) { 
-            addDirectLine(from, {from.x, to.y}, walls_); 
-            addDirectLine(from, {from.y, to.x}, walls_); 
-            addDirectLine(to, {to.x, from.y}, walls_); 
-            addDirectLine(to, {to.y, from.x}, walls_); 
+        void addCollisionRect(const Point2i& from, const Point2i& to) {
+            addDirectLine(from, { from.x, to.y }, walls_);
+            addDirectLine(from, { from.y, to.x }, walls_);
+            addDirectLine(to, { to.x, from.y }, walls_);
+            addDirectLine(to, { to.y, from.x }, walls_);
         }
         void removeCollision(const Point2i& coordinates) { walls_.erase(coordinates); }
         void clearCollisions() { walls_.clear(); }
@@ -400,7 +407,7 @@ namespace AStar
                 for (int pos = 0; pos <= abs(from.x - to.x); pos++) {
                     c.insert({ from.x + dir * pos, to.y });
                 }
-                
+
                 if (from.x < to.x) {
                     xSortWallLines.insert(LineSeg({ from, to }));
                     wallLines_.push_back(LineSeg({ from, to }));
@@ -420,7 +427,7 @@ namespace AStar
         std::map<int, Bridge>   bridges_;
         int                     bridgeId_ = 0;
         Vec2i                   worldSize_;
-                        
+
         // 保存个点的权值，如果不在里面，就认为是缺省值：10；
         std::map<Point2i, uint> costs_;
 
@@ -429,7 +436,7 @@ namespace AStar
     };
 
     class Generator
-    {  
+    {
     public:
         Generator() {
             setDiagonalMovement(false);
@@ -451,7 +458,7 @@ namespace AStar
         void setHeuristic(HeuristicFunction heuristic_) { heuristic = heuristic_; }
 
         bool isBridge(const Point2i& pt) { return map_.isBridge(pt); }
-                
+
         /// @brief 目前的模式，有重复检测的问题，另外baseCollision效率太低了； 
         /// 后面考虑预处理的方式，把跳点先检测出来
         /// @param current 
@@ -461,11 +468,11 @@ namespace AStar
         bool findJumpPoint_dynamic(Node* current, const Vec2i& dir, Point2i& jp) {
             jp = current->coordinates + dir;
             while (true)
-            {                
+            {
                 if (map_.baseCollision(jp)) {
                     break;
-                }                                
-                
+                }
+
                 /// if jump piont, 点或者矩形的四角斜方向的点，认为是跳点 
                 Vec2i vertical({ dir.y, dir.x });
                 if ((!map_.baseCollision(jp + dir) && !map_.baseCollision(jp + vertical) && map_.baseCollision(jp + dir + vertical)) ||
@@ -477,17 +484,17 @@ namespace AStar
 
                 jp = jp + dir;
             };
-            
+
             return false;
         }
 
         uint findBridgeSegLen(const Point2i& start, const Point2i& end)
-        {   
+        {
             if (start == end)
                 return 0;
 
             assert(end.x == start.x || end.y == start.y);
-            
+
             Point2i bridgePt;
             Vec2i unitDir = end - start;
             unitDir.x /= std::abs(unitDir.x + unitDir.y);
@@ -510,7 +517,7 @@ namespace AStar
 
                 bridgeEnd = bridgeEnd + unitDir;
             }
-                        
+
             return findBridge ? bridgeEnd.distance(bridgeStart) : 0;
         }
         bool findMidPoint(const Node* parent, const Point2i& end, Point2i& midPoint, uint& extraCost, const Point2i& targetPt)
@@ -524,7 +531,7 @@ namespace AStar
             Point2i midPointDy = start + Vec2i(0, dir.y);
             uint bridgeLenDy = findBridgeSegLen(start, midPointDy) + findBridgeSegLen(end, midPointDy) * 10;
 
-            
+
             uint totalLen = Heuristic::manhattan(start, end);
             assert(bridgeLenDx <= totalLen && bridgeLenDy <= totalLen);
 
@@ -535,10 +542,10 @@ namespace AStar
 
             // 暂时认为cost是桥和普通模式
             extraCost = std::min(dxDist, dyDist);
-            
+
             return dir.x != 0 && dir.y != 0;
         }
-        
+
         /// <summary>
         /// 最有效率的查找方式： 通过找跳点，计算跳点到桥的最近点；   
         /// </summary>
@@ -546,7 +553,7 @@ namespace AStar
         /// <param name="target_"></param>
         /// <returns></returns>
         CoordinateList findPath(Vec2i sourcePt, Vec2i targetPt) {
-            map_.startFindPath(sourcePt, targetPt);              
+            map_.startFindPath(sourcePt, targetPt);
 
             auto nodeComp = [](Node* a, Node* b) { return a->getScore() > b->getScore(); };
             // 定义优先队列，按f值从小到大排序; 小顶堆
@@ -554,7 +561,7 @@ namespace AStar
 
             auto setComp = [](Node* a, Node* b) { return b->coordinates < a->coordinates; };
             NodeSet closedSet(setComp);
-            NodeSet openSet(setComp);            
+            NodeSet openSet(setComp);
             openQueue.push(new Node(sourcePt));
 
             auto addNextPoint = [&](uint i, const Point2i& next, Node* parent) -> Node* {
@@ -568,54 +575,53 @@ namespace AStar
                 // 一次可能跳跃多格
                 uint extraCost = 0;
                 // 如果拐弯了，还是需要把中间点也登记上         
-                Point2i midPoint;                
+                Point2i midPoint;
                 if (findMidPoint(parent, next, midPoint, extraCost, targetPt)) {
                     Node* midNode = new Node(midPoint, parent);
                     midNode->G = parent->G;
                     midNode->H = heuristic(midNode->coordinates, targetPt) * Map::GENERAL_COST;
                     parent = midNode;
-                }                
+                }
 
                 uint totalCost = parent->G + ((i < 4) ? 10 : 14) * extraCost / 10
                     + (directPrefer ? 10 * calcNodeExtraCost(parent, next, targetPt) : 0);
-                
+
                 Node* successor = findNodeOnList(openSet, next);
-                if (successor == nullptr) {                    
+                if (successor == nullptr) {
                     successor = new Node(next, parent);
                     successor->G = totalCost;
                     successor->H = heuristic(successor->coordinates, targetPt) * Map::GENERAL_COST;
                     openQueue.push(successor);
                     openSet.insert(successor);
 
-                    std::cout << "add node  G: " << totalCost << "; H: " << successor->H << std::endl;
-                    std::cout << "           : " << " x: " << next.x << ", y: " << next.y << std::endl;
-                    std::cout << "    parent : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
+                    //                    std::cout << "add node  G: " << totalCost << "; H: " << successor->H << std::endl;
+                    //                    std::cout << "           : " << " x: " << next.x << ", y: " << next.y << std::endl;
+                    //                    std::cout << "    parent : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
                 }
                 else if (totalCost < successor->G) {
                     successor->parent = parent;
                     successor->G = totalCost;
-
-                    std::cout << "update node G: " << totalCost << "; H: " << successor->H << std::endl;
-                    std::cout << "             : " << " x: " << next.x << ", y: " << next.y << std::endl;
-                    std::cout << "    parent   : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
+                    //                    std::cout << "update node G: " << totalCost << "; H: " << successor->H << std::endl;
+                    //                    std::cout << "             : " << " x: " << next.x << ", y: " << next.y << std::endl;
+                    //                    std::cout << "    parent   : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
                 }
                 return successor;
-            };                     
-            
+                };
+
             Node* current = nullptr;
             while (!openQueue.empty()) {
                 current = openQueue.top();
                 if (current->coordinates == targetPt) {
                     break;
                 }
-                
+
                 closedSet.insert(current);
                 openSet.erase(current);
                 openQueue.pop();
 
                 Point2i jp;
                 for (uint i = 0; i < directions; ++i) {
-                    if (i < 4) {                        
+                    if (i < 4) {
                         if (isBridge(current->coordinates)) {
                             Vec2i nextCoord(current->coordinates + direction[i]);
                             // find next cross point
@@ -628,8 +634,8 @@ namespace AStar
 
                                 nextCoord = nextCoord + direction[i];
                             }
-                                                       
-                            if (map_.findJumpPoint(current->coordinates, direction[i], jp)){
+
+                            if (map_.findJumpPoint(current->coordinates, direction[i], jp)) {
                                 addNextPoint(i, jp, current);
                             }
                             continue;
@@ -644,7 +650,7 @@ namespace AStar
                     bool haveJp = map_.findJumpPoint(current->coordinates, direction[i], jp);
                     if (haveJp) {
                         addNextPoint(i, jp, current);
-                    }                    
+                    }
                 }
             }
 
@@ -653,14 +659,20 @@ namespace AStar
                 oriPath.push_back(current->coordinates);
                 current = current->parent;
             }
+            std::reverse(oriPath.begin(), oriPath.end());
+
             if (oriPath.size() > 2) {
                 path.push_back(oriPath[0]);
-                for(int i=2; i< oriPath.size(); ++i) {
-                    if (oriPath[i].x != oriPath[i-2].x && oriPath[i].y != oriPath[i-2].y) {
-                        path.push_back(oriPath[i-1] + map_.baseAlignPoint());
+                int i = 2;
+                for (; i < oriPath.size(); ++i) {
+                    if (oriPath[i].x != oriPath[i - 2].x && oriPath[i].y != oriPath[i - 2].y) {
+                        path.push_back(oriPath[i - 1]);
                     }
                 }
-                path.push_back(oriPath[oriPath.size()-1] + map_.baseAlignPoint());
+                path.push_back(oriPath.back());
+            }
+            for (auto& p : path) {
+                p += map_.baseAlignPoint();
             }
 
             while (!openQueue.empty())
@@ -671,7 +683,7 @@ namespace AStar
             releaseNodes(closedSet);
 
             return path;
-        }      
+        }
 
 
     private:
@@ -686,7 +698,7 @@ namespace AStar
                 it = nodes_.erase(it);
             }
         }
-        
+
 
         // 尽量走直线
         int calcNodeExtraCost(const Node* currNode, const Point2i& nextNode, const Point2i& target) {
@@ -711,7 +723,7 @@ namespace AStar
         CoordinateList      direction;      // 所有方向（8个）
         uint                directions = 8; // 设置好可以走的方向数
         bool directPrefer = true;           // 是否优先走直线             
-    };   
+    };
 }
 
 #endif // __ASTAR_HPP_8F637DB91972F6C878D41D63F7E7214F__

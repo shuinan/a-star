@@ -21,7 +21,7 @@ int main()
     //map.setCost({100, 2}, 1);
 
     std::cout << "Generate path ... \n";
-    auto path = generator.findPath({10, 10}, {2400, 2400});
+    auto path = generator.findPath({10, 2010}, {2400, 24});
 
     for(auto& coordinate : path) {
         std::cout << coordinate.x << " " << coordinate.y << "\n";
