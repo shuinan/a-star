@@ -233,7 +233,7 @@ namespace AStar
             return dis != MAX_WORLD_LEN;
         }
 
-        void preJumpPointSearch() {
+        void preJumpPointSearch(const Point2i& target) {
             jumpPoints_.clear();
 
             // 四角斜对外点，认为是跳点（和jps里面可以走斜线的方式不同)
@@ -260,6 +260,12 @@ namespace AStar
                 }
             }
 
+            for (auto& dir : std::vector<Vec2i>({ { 1,0 },{ -1,0 },{ 0,1 },{ 0, -1} })) {
+                if (findNearestBridge(target, dir, jp)) {
+                    jumpPoints_.insert(jp);
+                }
+            }
+
             if (1) {
                 for (auto bridge : bridges_) {
                     jumpPoints_.insert(bridge.second.start);
@@ -268,7 +274,7 @@ namespace AStar
             }
         }
         void startFindPath(const Point2i& start, const Point2i& target) {
-            preJumpPointSearch();
+            preJumpPointSearch(target);
             jumpPoints_.insert(target);
         }
 
@@ -344,14 +350,6 @@ namespace AStar
             for (auto& seg : wallLines_) {
                 seg.move(lbPoint);
             }
-            auto tempWl = std::move(xSortWallLines);
-            for (auto seg : tempWl) {
-                xSortWallLines.insert(seg.move(lbPoint));
-            }
-            tempWl = std::move(ySortWallLines);
-            for (auto seg : tempWl) {
-                ySortWallLines.insert(seg.move(lbPoint));
-            }
             auto tempPath = std::move(paths_);
             for (auto path : tempPath) {
                 paths_.insert(path -= lbPoint);
@@ -373,10 +371,10 @@ namespace AStar
         /// @brief add a direct line
         void addCollisionLine(const Point2i& from, const Point2i& to) { addDirectLine(from, to, walls_); }
         void addCollisionRect(const Point2i& from, const Point2i& to) {
+            addDirectLine(from, { to.x, from.y }, walls_);
             addDirectLine(from, { from.x, to.y }, walls_);
-            addDirectLine(from, { from.y, to.x }, walls_);
             addDirectLine(to, { to.x, from.y }, walls_);
-            addDirectLine(to, { to.y, from.x }, walls_);
+            addDirectLine(to, { from.x, to.y }, walls_);
         }
         void removeCollision(const Point2i& coordinates) { walls_.erase(coordinates); }
         void clearCollisions() { walls_.clear(); }
@@ -394,11 +392,9 @@ namespace AStar
                 }
 
                 if (from.y < to.y) {
-                    ySortWallLines.insert(LineSeg({ from, to }));
                     wallLines_.push_back(LineSeg({ from, to }));
                 }
                 else {
-                    ySortWallLines.insert(LineSeg({ to, from }));
                     wallLines_.push_back(LineSeg({ to, from }));
                 }
             }
@@ -409,11 +405,9 @@ namespace AStar
                 }
 
                 if (from.x < to.x) {
-                    xSortWallLines.insert(LineSeg({ from, to }));
                     wallLines_.push_back(LineSeg({ from, to }));
                 }
                 else {
-                    xSortWallLines.insert(LineSeg({ to, from }));
                     wallLines_.push_back(LineSeg({ to, from }));
                 }
             }
@@ -422,7 +416,6 @@ namespace AStar
         // 有待优化, 使用set节省空间，但是查找速度略慢      下面记录的都是点阵
         std::set<Point2i>       walls_;
         std::vector<LineSeg>    wallLines_;         // 同时记录的障碍线条，辅助找障碍，必须和walls_一致
-        std::set<LineSeg>       xSortWallLines, ySortWallLines; // 两个方向(sort by x/y)按起点排序，加速搜索
         std::set<Point2i>       paths_;             // 如果规划多条线路，线路可以交叉，但是不可以有重复的段
         std::map<int, Bridge>   bridges_;
         int                     bridgeId_ = 0;
@@ -520,30 +513,44 @@ namespace AStar
 
             return findBridge ? bridgeEnd.distance(bridgeStart) : 0;
         }
-        bool findMidPoint(const Node* parent, const Point2i& end, Point2i& midPoint, uint& extraCost, const Point2i& targetPt)
+        bool midPointRouter(const Node* curNode, const Point2i& end, Point2i& midPoint, uint& extraCost, const Point2i& targetPt)
         {
-            assert(parent != nullptr);
-            Point2i start = parent->coordinates;
+            assert(curNode != nullptr);
+            Point2i start = curNode->coordinates;
             Vec2i dir = end - start;
             Point2i midPointDx = start + Vec2i(dir.x, 0);
-            uint bridgeLenDx = findBridgeSegLen(start, midPointDx) + findBridgeSegLen(end, midPointDx) * 10;
+            uint bridgeLenDx = (findBridgeSegLen(start, midPointDx) + findBridgeSegLen(end, midPointDx)) * 10;
 
             Point2i midPointDy = start + Vec2i(0, dir.y);
-            uint bridgeLenDy = findBridgeSegLen(start, midPointDy) + findBridgeSegLen(end, midPointDy) * 10;
+            uint bridgeLenDy = (findBridgeSegLen(start, midPointDy) + findBridgeSegLen(end, midPointDy)) * 10;
 
 
             uint totalLen = Heuristic::manhattan(start, end);
             assert(bridgeLenDx <= totalLen && bridgeLenDy <= totalLen);
 
             // 优先走直线
-            uint dxDist = totalLen * Map::GENERAL_COST + bridgeLenDx * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer ? calcNodeExtraCost(parent, midPointDx, targetPt) : 0);
-            uint dyDist = totalLen * Map::GENERAL_COST + bridgeLenDy * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer ? calcNodeExtraCost(parent, midPointDy, targetPt) : 0);
+            uint dxDist = totalLen * Map::GENERAL_COST + bridgeLenDx * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer ? calcNodeExtraCost(curNode, midPointDx, targetPt) : 0);
+            uint dyDist = totalLen * Map::GENERAL_COST + bridgeLenDy * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer ? calcNodeExtraCost(curNode, midPointDy, targetPt) : 0);
             midPoint = dxDist > dyDist ? midPointDy : midPointDx;
 
             // 暂时认为cost是桥和普通模式
             extraCost = std::min(dxDist, dyDist);
 
             return dir.x != 0 && dir.y != 0;
+        }
+
+        // 需要考虑桥对H值的影响
+        uint calH(const Node* curNode, const Point2i& targetPt) {
+            const Point2i& curPt = curNode->coordinates;
+#if 0       // H值参考桥达不到效果，还是不应该参考
+            if (map_.isBridge(curPt)) {
+                Point2i midPoint;
+                uint extraCost = 0;
+                midPointRouter(curNode, targetPt, midPoint, extraCost, targetPt);
+                return extraCost;
+            }
+#endif
+            return heuristic(curPt, targetPt)* Map::GENERAL_COST;
         }
 
         /// <summary>
@@ -562,7 +569,8 @@ namespace AStar
             auto setComp = [](Node* a, Node* b) { return b->coordinates < a->coordinates; };
             NodeSet closedSet(setComp);
             NodeSet openSet(setComp);
-            openQueue.push(new Node(sourcePt));
+            Node* startNode = new Node(sourcePt);
+            openQueue.push(startNode);
 
             auto addNextPoint = [&](uint i, const Point2i& next, Node* parent) -> Node* {
                 assert(parent != nullptr);
@@ -576,7 +584,7 @@ namespace AStar
                 uint extraCost = 0;
                 // 如果拐弯了，还是需要把中间点也登记上         
                 Point2i midPoint;
-                if (findMidPoint(parent, next, midPoint, extraCost, targetPt)) {
+                if (midPointRouter(parent, next, midPoint, extraCost, targetPt)) {
                     Node* midNode = new Node(midPoint, parent);
                     midNode->G = parent->G;
                     midNode->H = heuristic(midNode->coordinates, targetPt) * Map::GENERAL_COST;
@@ -590,23 +598,39 @@ namespace AStar
                 if (successor == nullptr) {
                     successor = new Node(next, parent);
                     successor->G = totalCost;
-                    successor->H = heuristic(successor->coordinates, targetPt) * Map::GENERAL_COST;
+                    successor->H = calH(successor, targetPt); // heuristic(successor->coordinates, targetPt) * Map::GENERAL_COST;
                     openQueue.push(successor);
                     openSet.insert(successor);
-
-                    //                    std::cout << "add node  G: " << totalCost << "; H: " << successor->H << std::endl;
-                    //                    std::cout << "           : " << " x: " << next.x << ", y: " << next.y << std::endl;
-                    //                    std::cout << "    parent : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
+                    //                                        std::cout << "add node  G: " << totalCost << "; H: " << successor->H << std::endl;
+                    //                                        std::cout << "           : " << " x: " << next.x << ", y: " << next.y << std::endl;
+                    //                                        std::cout << "    parent : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
                 }
                 else if (totalCost < successor->G) {
                     successor->parent = parent;
                     successor->G = totalCost;
-                    //                    std::cout << "update node G: " << totalCost << "; H: " << successor->H << std::endl;
-                    //                    std::cout << "             : " << " x: " << next.x << ", y: " << next.y << std::endl;
-                    //                    std::cout << "    parent   : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
+                    //                                       std::cout << "update node G: " << totalCost << "; H: " << successor->H << std::endl;
+                    //                                       std::cout << "             : " << " x: " << next.x << ", y: " << next.y << std::endl;
+                    //                                       std::cout << "    parent   : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
                 }
                 return successor;
-                };
+            };
+
+            Point2i jp;
+            Node* nearestNode = nullptr;
+            // 第一步优先最近的桥
+            uint disBridge = Map::MAX_WORLD_LEN;
+            for (uint i = 0; i < 4; ++i) {                
+                if (map_.findNearestBridge(sourcePt, direction[i], jp)) {
+                    Node* cur = addNextPoint(i, jp, startNode);
+                    if (disBridge > jp.distance(sourcePt)) {
+                        disBridge = jp.distance(sourcePt);
+                        nearestNode = cur;
+                    }                    
+                }
+            }
+            if (nearestNode != nullptr) {
+                nearestNode->G = 0;     
+            }            
 
             Node* current = nullptr;
             while (!openQueue.empty()) {
@@ -619,7 +643,8 @@ namespace AStar
                 openSet.erase(current);
                 openQueue.pop();
 
-                Point2i jp;
+
+                Point2i jp;                
                 for (uint i = 0; i < directions; ++i) {
                     if (i < 4) {
                         if (isBridge(current->coordinates)) {
@@ -655,24 +680,26 @@ namespace AStar
             }
 
             CoordinateList path, oriPath;
-            while (current != nullptr) {
-                oriPath.push_back(current->coordinates);
-                current = current->parent;
-            }
-            std::reverse(oriPath.begin(), oriPath.end());
-
-            if (oriPath.size() > 2) {
-                path.push_back(oriPath[0]);
-                int i = 2;
-                for (; i < oriPath.size(); ++i) {
-                    if (oriPath[i].x != oriPath[i - 2].x && oriPath[i].y != oriPath[i - 2].y) {
-                        path.push_back(oriPath[i - 1]);
-                    }
+            if (current != nullptr && current->coordinates == targetPt) {
+                while (current != nullptr) {
+                    oriPath.push_back(current->coordinates);
+                    current = current->parent;
                 }
-                path.push_back(oriPath.back());
-            }
-            for (auto& p : path) {
-                p += map_.baseAlignPoint();
+                std::reverse(oriPath.begin(), oriPath.end());
+
+                if (oriPath.size() > 2) {
+                    path.push_back(oriPath[0]);
+                    int i = 2;
+                    for (; i < oriPath.size(); ++i) {
+                        if (oriPath[i].x != oriPath[i - 2].x && oriPath[i].y != oriPath[i - 2].y) {
+                            path.push_back(oriPath[i - 1]);
+                        }
+                    }
+                    path.push_back(oriPath.back());
+                }
+                for (auto& p : path) {
+                    p += map_.baseAlignPoint();
+                }
             }
 
             while (!openQueue.empty())
@@ -709,9 +736,8 @@ namespace AStar
             }
 
             // 拐向终点的点
-            if (nextNode.x == target.x || nextNode.y == target.y) {
+            if (nextNode.x == target.x || nextNode.y == target.y)
                 return 1;
-            }
 
             // 普通拐点
             return 2;
