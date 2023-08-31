@@ -98,11 +98,13 @@ namespace AStar
         static const int MAX_WORLD_LEN = 100000;
     public:
         Map() : baseAlignPoint_({ 0,0 }) {}
+        ~Map() { delete []wallsBuffer_; }
 
         bool baseCollision(const Point2i& nextCoord) {
             return  nextCoord.x < 0 || nextCoord.x >= worldSize_.x ||
                 nextCoord.y < 0 || nextCoord.y >= worldSize_.y ||
-                walls_.find(nextCoord) != walls_.end();
+                //walls_.find(nextCoord) != walls_.end();
+                wallsBuffer_[nextCoord.x + nextCoord.y * worldSize_.x];
         }
         // 看看是否和以前规划的线路重复（通过path录入）
         bool detectCollision(const Point2i& nextCoord, const Point2i& curCoord) {
@@ -273,9 +275,20 @@ namespace AStar
                 }
             }
         }
-        void startFindPath(const Point2i& start, const Point2i& target) {
+        bool startFindPath(const Point2i& start, const Point2i& target) {
+            if (!wallsBuffer_) {
+                wallsBuffer_ = new(std::nothrow) char[worldSize_.x * worldSize_.y];
+                if (!wallsBuffer_)
+                    return false;
+                memset(wallsBuffer_, 0, worldSize_.x * worldSize_.y);
+                for (auto pt : walls_) {
+                    assert(pt.x <= worldSize_.x && pt.y <= worldSize_.y);
+                    wallsBuffer_[pt.x + pt.y * worldSize_.x] = 1;
+                }
+            }
             preJumpPointSearch(target);
             jumpPoints_.insert(target);
+            return true;
         }
 
         int addBridge(const Point2i& start, const Point2i& end) {
@@ -347,9 +360,6 @@ namespace AStar
             for (auto wall : tempWall) {
                 walls_.insert(wall -= lbPoint);
             }
-            for (auto& seg : wallLines_) {
-                seg.move(lbPoint);
-            }
             auto tempPath = std::move(paths_);
             for (auto path : tempPath) {
                 paths_.insert(path -= lbPoint);
@@ -367,7 +377,7 @@ namespace AStar
 
             return lbPoint;
         }
-        void addCollision(const Point2i& pt) { walls_.insert(pt); wallLines_.push_back({ pt, pt }); }
+        void addCollision(const Point2i& pt) { walls_.insert(pt); }
         /// @brief add a direct line
         void addCollisionLine(const Point2i& from, const Point2i& to) { addDirectLine(from, to, walls_); }
         void addCollisionRect(const Point2i& from, const Point2i& to) {
@@ -390,32 +400,18 @@ namespace AStar
                 for (int pos = 0; pos <= abs(from.y - to.y); pos++) {
                     c.insert({ to.x, from.y + dir * pos });
                 }
-
-                if (from.y < to.y) {
-                    wallLines_.push_back(LineSeg({ from, to }));
-                }
-                else {
-                    wallLines_.push_back(LineSeg({ to, from }));
-                }
             }
             else if (from.y == to.y) {
                 int dir = from.x > to.x ? -1 : 1;
                 for (int pos = 0; pos <= abs(from.x - to.x); pos++) {
                     c.insert({ from.x + dir * pos, to.y });
                 }
-
-                if (from.x < to.x) {
-                    wallLines_.push_back(LineSeg({ from, to }));
-                }
-                else {
-                    wallLines_.push_back(LineSeg({ to, from }));
-                }
             }
         }
     private:
         // 有待优化, 使用set节省空间，但是查找速度略慢      下面记录的都是点阵
         std::set<Point2i>       walls_;
-        std::vector<LineSeg>    wallLines_;         // 同时记录的障碍线条，辅助找障碍，必须和walls_一致
+        char*                   wallsBuffer_ = nullptr; // 使用这个buffer，速度比直接使用walls_速度提升一倍
         std::set<Point2i>       paths_;             // 如果规划多条线路，线路可以交叉，但是不可以有重复的段
         std::map<int, Bridge>   bridges_;
         int                     bridgeId_ = 0;
@@ -541,12 +537,14 @@ namespace AStar
 
         /// <summary>
         /// 最有效率的查找方式： 通过找跳点，计算跳点到桥的最近点；   
+        /// 如果没有数据调整，这个方法可以反复使用；  有地图数据加入或者删除时，主要是 align（对齐）会每次对现有整个地图对齐
         /// </summary>
-        /// <param name="source_"></param>
-        /// <param name="target_"></param>
-        /// <returns></returns>
+        /// <param name="source_">寻路的开始点</param>
+        /// <param name="target_">寻路的结束点</param>
+        /// <returns>路径点，从开始点起，包括了开始点和结束点； 如果是空的表示没找到路径</returns>
         CoordinateList findPath(Vec2i sourcePt, Vec2i targetPt) {
-            map_.startFindPath(sourcePt, targetPt);
+            if (!map_.startFindPath(sourcePt, targetPt))
+                return CoordinateList();
 
             auto nodeComp = [](Node* a, Node* b) { return a->getScore() > b->getScore(); };
             // 定义优先队列，按f值从小到大排序; 小顶堆
