@@ -447,7 +447,7 @@ namespace AStar
 
         Map& getMap() { return map_; }
 
-        void setDirectPrefer(bool f) { directPrefer = f; }
+        void setDirectPrefer(bool f) { directPrefer_ = f; }
         void setHeuristic(HeuristicFunction heuristic_) { heuristic = heuristic_; }
 
         bool isBridge(const Point2i& pt) { return map_.isBridge(pt); }
@@ -529,28 +529,14 @@ namespace AStar
             assert(bridgeLenDx <= totalLen && bridgeLenDy <= totalLen);
 
             // 优先走直线
-            uint dxDist = totalLen * Map::GENERAL_COST + bridgeLenDx * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer ? calcNodeExtraCost(curNode, midPointDx, targetPt) : 0);
-            uint dyDist = totalLen * Map::GENERAL_COST + bridgeLenDy * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer ? calcNodeExtraCost(curNode, midPointDy, targetPt) : 0);
+            uint dxDist = totalLen * Map::GENERAL_COST + bridgeLenDx * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDx, targetPt) : 0);
+            uint dyDist = totalLen * Map::GENERAL_COST + bridgeLenDy * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDy, targetPt) : 0);
             midPoint = dxDist > dyDist ? midPointDy : midPointDx;
 
             // 暂时认为cost是桥和普通模式
             extraCost = std::min(dxDist, dyDist);
 
             return dir.x != 0 && dir.y != 0;
-        }
-
-        // 需要考虑桥对H值的影响
-        uint calH(const Node* curNode, const Point2i& targetPt) {
-            const Point2i& curPt = curNode->coordinates;
-#if 0       // H值参考桥达不到效果，还是不应该参考
-            if (map_.isBridge(curPt)) {
-                Point2i midPoint;
-                uint extraCost = 0;
-                midPointRouter(curNode, targetPt, midPoint, extraCost, targetPt);
-                return extraCost;
-            }
-#endif
-            return heuristic(curPt, targetPt)* Map::GENERAL_COST;
         }
 
         /// <summary>
@@ -587,18 +573,18 @@ namespace AStar
                 if (midPointRouter(parent, next, midPoint, extraCost, targetPt)) {
                     Node* midNode = new Node(midPoint, parent);
                     midNode->G = parent->G;
-                    midNode->H = heuristic(midNode->coordinates, targetPt) * Map::GENERAL_COST;
+                    midNode->H = heuristic(midNode->coordinates, targetPt) * Map::GENERAL_COST / 2;
                     parent = midNode;
                 }
 
                 uint totalCost = parent->G + ((i < 4) ? 10 : 14) * extraCost / 10
-                    + (directPrefer ? 10 * calcNodeExtraCost(parent, next, targetPt) : 0);
+                    + (directPrefer_ ? 10 * calcNodeExtraCost(parent, next, targetPt) : 0);
 
                 Node* successor = findNodeOnList(openSet, next);
                 if (successor == nullptr) {
                     successor = new Node(next, parent);
                     successor->G = totalCost;
-                    successor->H = calH(successor, targetPt); // heuristic(successor->coordinates, targetPt) * Map::GENERAL_COST;
+                    successor->H = heuristic(successor->coordinates, targetPt) * Map::GENERAL_COST /2;
                     openQueue.push(successor);
                     openSet.insert(successor);
                     //                                        std::cout << "add node  G: " << totalCost << "; H: " << successor->H << std::endl;
@@ -616,21 +602,24 @@ namespace AStar
             };
 
             Point2i jp;
-            Node* nearestNode = nullptr;
-            // 第一步优先最近的桥
-            uint disBridge = Map::MAX_WORLD_LEN;
-            for (uint i = 0; i < 4; ++i) {                
-                if (map_.findNearestBridge(sourcePt, direction[i], jp)) {
-                    Node* cur = addNextPoint(i, jp, startNode);
-                    if (disBridge > jp.distance(sourcePt)) {
-                        disBridge = jp.distance(sourcePt);
-                        nearestNode = cur;
-                    }                    
+
+            if (first4bridge_) {
+                Node* nearestNode = nullptr;
+                // 第一步优先最近的桥
+                uint disBridge = Map::MAX_WORLD_LEN;
+                for (uint i = 0; i < 4; ++i) {
+                    if (map_.findNearestBridge(sourcePt, direction[i], jp)) {
+                        Node* cur = addNextPoint(i, jp, startNode);
+                        if (disBridge > jp.distance(sourcePt)) {
+                            disBridge = jp.distance(sourcePt);
+                            nearestNode = cur;
+                        }
+                    }
+                }
+                if (nearestNode != nullptr) {
+                    nearestNode->G = 0;
                 }
             }
-            if (nearestNode != nullptr) {
-                nearestNode->G = 0;     
-            }            
 
             Node* current = nullptr;
             while (!openQueue.empty()) {
@@ -748,7 +737,8 @@ namespace AStar
         HeuristicFunction   heuristic;
         CoordinateList      direction;      // 所有方向（8个）
         uint                directions = 8; // 设置好可以走的方向数
-        bool directPrefer = true;           // 是否优先走直线             
+        bool directPrefer_ = true;          // 是否优先走直线        
+        bool first4bridge_ = true;          // 第一步是否优先走bridge
     };
 }
 

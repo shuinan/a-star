@@ -33,3 +33,8 @@ int main()
 使用优先队列/ set 替代原来的数据结构，速度飙升。 目前debug模式下， 240/240 寻路，643ms
 
 https://blog.csdn.net/wenyuan65/article/details/81587768  这篇文章有启发
+
+不过，为提高速度，必须参考jps是思想
+
+后续可以调整H的比重来达到更好的效果
+
