@@ -1,5 +1,5 @@
-#ifndef __ASTAR_HPP_8F637DB91972F6C878D41D63F7E7214F__
-#define __ASTAR_HPP_8F637DB91972F6C878D41D63F7E7214F__
+#ifndef __ROUTER_HPP_8F637DB91972F6C878D41D63F7E7214F__
+#define __ROUTER_HPP_8F637DB91972F6C878D41D63F7E7214F__
 
 #include <vector>
 #include <set>
@@ -17,7 +17,7 @@
 /// 考虑到我们有管廊/管网这一类捷径，可以贪心的方式直接走下去
 /// 如果有空切的地方，直线扫描方式来定位, 朝向终点，前后上下直线搜索
 /// ? 并找到边界点作为跳点
-namespace AStar
+namespace Router
 {
     using uint = unsigned int;
 
@@ -339,6 +339,7 @@ namespace AStar
             rtPoint.y = std::max(rtPoint.y, pt.y);
         }
         /// @brief set worldsize by current walls, with extra w,h; will modify all position of current data
+        /// 如果外部不能保证基准点是（0，0），应该先调用这个函数，再直线路径查找
         /// @param ew    extra width
         /// @param eh    extra height
         Vec2i align(int ew, int eh) {
@@ -542,7 +543,10 @@ namespace AStar
         /// <param name="source_">寻路的开始点</param>
         /// <param name="target_">寻路的结束点</param>
         /// <returns>路径点，从开始点起，包括了开始点和结束点； 如果是空的表示没找到路径</returns>
-        CoordinateList findPath(Vec2i sourcePt, Vec2i targetPt) {
+        CoordinateList findPath(Point2i sourcePt, Point2i targetPt) {
+            sourcePt -= map_.baseAlignPoint();
+            targetPt -= map_.baseAlignPoint();
+
             if (!map_.startFindPath(sourcePt, targetPt))
                 return CoordinateList();
 
@@ -740,4 +744,4 @@ namespace AStar
     };
 }
 
-#endif // __ASTAR_HPP_8F637DB91972F6C878D41D63F7E7214F__
+#endif // __ROUTER_HPP_8F637DB91972F6C878D41D63F7E7214F__

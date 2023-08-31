@@ -1,6 +1,6 @@
 #include <iostream>
 #include <chrono>
-#include "source/AStar.hpp"
+#include "source/Router.hpp"
 
 void drawPath(const std::vector<std::pair<int, int>>& path, char* buffer, int width, int height) {
     // 将路径表示在缓冲区中
@@ -37,11 +37,11 @@ int main()
 {
     auto start = std::chrono::high_resolution_clock::now();
 
-    AStar::Generator generator;
-    generator.setHeuristic(AStar::Heuristic::euclidean);
+    Router::Generator generator;
+    generator.setHeuristic(Router::Heuristic::euclidean);
     generator.setDiagonalMovement(false);
     
-    AStar::Map& map = generator.getMap();
+    Router::Map& map = generator.getMap();
     map.setWorldSize({260, 160});
     //map.addCollisionLine({4, 10}, {4, 100});
     map.addCollisionRect({ 30, 40 }, { 80, 90 });
