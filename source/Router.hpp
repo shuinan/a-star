@@ -278,7 +278,7 @@ namespace Router
         bool startFindPath(const Point2i& start, const Point2i& target) {
             if (!wallsBuffer_) {
                 wallsBuffer_ = new(std::nothrow) char[worldSize_.x * worldSize_.y];
-                if (!wallsBuffer_)
+                if (wallsBuffer_ == nullptr)
                     return false;
                 memset(wallsBuffer_, 0, worldSize_.x * worldSize_.y);
                 for (auto pt : walls_) {
@@ -557,7 +557,10 @@ namespace Router
             auto setComp = [](Node* a, Node* b) { return b->coordinates < a->coordinates; };
             NodeSet closedSet(setComp);
             NodeSet openSet(setComp);
-            Node* startNode = new Node(sourcePt);
+            Node* startNode = new(std::nothrow) Node(sourcePt);
+            if (startNode == nullptr) {
+                return CoordinateList();
+            }
             openQueue.push(startNode);
 
             auto addNextPoint = [&](uint i, const Point2i& next, Node* parent) -> Node* {
@@ -573,7 +576,9 @@ namespace Router
                 // 如果拐弯了，还是需要把中间点也登记上         
                 Point2i midPoint;
                 if (midPointRouter(parent, next, midPoint, extraCost, targetPt)) {
-                    Node* midNode = new Node(midPoint, parent);
+                    Node* midNode = new(std::nothrow) Node(midPoint, parent);
+                    if (midNode == nullptr)
+                        return nullptr;
                     midNode->G = parent->G;
                     midNode->H = heuristic(midNode->coordinates, targetPt) * Map::GENERAL_COST / 2;
                     parent = midNode;
@@ -582,23 +587,28 @@ namespace Router
                 uint totalCost = parent->G + ((i < 4) ? 10 : 14) * extraCost / 10
                     + (directPrefer_ ? 10 * calcNodeExtraCost(parent, next, targetPt) : 0);
 
-                Node* successor = findNodeOnList(openSet, next);
+                // openset 不是太大，简单搜索，如果很大，考虑使用额外容器来加速
+                Node* successor = nullptr;
+                for (auto n : openSet) {
+                    if (n->coordinates == next) {
+                        successor = n;
+                        break;
+                    }
+                }
                 if (successor == nullptr) {
-                    successor = new Node(next, parent);
+                    successor = new(std::nothrow) Node(next, parent);
+                    if (successor ==nullptr)
+                        return nullptr;
                     successor->G = totalCost;
                     successor->H = heuristic(successor->coordinates, targetPt) * Map::GENERAL_COST /2;
                     openQueue.push(successor);
                     openSet.insert(successor);
-                    //                                        std::cout << "add node  G: " << totalCost << "; H: " << successor->H << std::endl;
-                    //                                        std::cout << "           : " << " x: " << next.x << ", y: " << next.y << std::endl;
-                    //                                        std::cout << "    parent : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
                 }
                 else if (totalCost < successor->G) {
                     successor->parent = parent;
                     successor->G = totalCost;
-                    //                                       std::cout << "update node G: " << totalCost << "; H: " << successor->H << std::endl;
-                    //                                       std::cout << "             : " << " x: " << next.x << ", y: " << next.y << std::endl;
-                    //                                       std::cout << "    parent   : " << " x: " << parent->coordinates.x << ", y: " << parent->coordinates.y << std::endl;
+//                    openQueue.erase(successor);               // update order
+//                    openQueue.insert(successor);
                 }
                 return successor;
             };
@@ -632,8 +642,7 @@ namespace Router
 
                 closedSet.insert(current);
                 openSet.erase(current);
-                openQueue.pop();
-
+				openQueue.pop();
 
                 Point2i jp;                
                 for (uint i = 0; i < directions; ++i) {
@@ -693,16 +702,18 @@ namespace Router
                 }
             }
 
-            while (!openQueue.empty())
+			while (!openQueue.empty())
             {
                 delete openQueue.top();
                 openQueue.pop();
             }
-            releaseNodes(closedSet);
+            //for(auto n : openQueue)
+              //  delete n;
+            for (auto n : closedSet)
+                delete n;
 
             return path;
         }
-
 
     private:
         Node* findNodeOnList(NodeSet& nodes_, Vec2i coordinates_) {
@@ -710,14 +721,7 @@ namespace Router
             auto it = nodes_.find(&node);
             return it == nodes_.end() ? nullptr : *it;
         }
-        void releaseNodes(NodeSet& nodes_) {
-            for (auto it = nodes_.begin(); it != nodes_.end();) {
-                delete* it;
-                it = nodes_.erase(it);
-            }
-        }
-
-
+        
         // 尽量走直线
         int calcNodeExtraCost(const Node* currNode, const Point2i& nextNode, const Point2i& target) {
             // 第一个点或直线点
