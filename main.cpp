@@ -4,7 +4,7 @@
 
 void drawPath(const std::vector<std::pair<int, int>>& path, char* buffer, int width, int height) {
     // 将路径表示在缓冲区中
-    for (int i = 0; i < path.size() - 1; i++) {
+    for (std::size_t i = 0; i < path.size() - 1; i++) {
         int x1 = path[i].first;
         int y1 = path[i].second;
         int x2 = path[i + 1].first;
@@ -57,6 +57,8 @@ int main()
     std::cout << "Generate path ... \n";
     auto path = generator.findPath({20, 20}, {240, 130});
 
+    for (int i = 1; i < 100; ++i)
+        generator.findPath({ 20, 20 + i }, { 240, 130 });
 
     // 定义路径的点数组
     std::vector<std::pair<int, int>> path1;

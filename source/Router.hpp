@@ -35,7 +35,7 @@ namespace Router
         bool operator == (const Vec2i& coordinates_) const { return x == coordinates_.x && y == coordinates_.y; }
         bool operator != (const Vec2i& coordinates_) const { return x != coordinates_.x || y != coordinates_.y; }
         bool operator < (const Vec2i& dest) const { return  x == dest.x ? y < dest.y : x < dest.x; }
-        uint distance(const Vec2i& t) const { return sqrt(pow(x - t.x, 2) + pow(y - t.y, 2)); }
+        uint distance(const Vec2i& t) const { return (uint)sqrt(pow(x - t.x, 2) + pow(y - t.y, 2)); }
     };
     typedef Vec2i  Point2i;
 
@@ -269,7 +269,7 @@ namespace Router
             }
 
             if (1) {
-                for (auto bridge : bridges_) {
+                for (const auto& bridge : bridges_) {
                     jumpPoints_.insert(bridge.second.start);
                     jumpPoints_.insert(bridge.second.start);
                 }
@@ -277,12 +277,13 @@ namespace Router
         }
         bool startFindPath(const Point2i& start, const Point2i& target) {
             if (!wallsBuffer_) {
-                wallsBuffer_ = new(std::nothrow) char[worldSize_.x * worldSize_.y];
+                wallsBuffer_ = new(std::nothrow) char[worldSize_.x * worldSize_.y + 2];
                 if (wallsBuffer_ == nullptr)
                     return false;
                 memset(wallsBuffer_, 0, worldSize_.x * worldSize_.y);
                 for (auto pt : walls_) {
                     assert(pt.x <= worldSize_.x && pt.y <= worldSize_.y);
+                    assert(pt.x >= 0 && pt.y >= 0);
                     wallsBuffer_[pt.x + pt.y * worldSize_.x] = 1;
                 }
             }
@@ -347,7 +348,7 @@ namespace Router
             for (auto& wall : walls_) {
                 range(wall, lbPoint, rtPoint);
             }
-            for (auto b : bridges_) {
+            for (const auto& b : bridges_) {
                 range(b.second.start, lbPoint, rtPoint);
                 range(b.second.end, lbPoint, rtPoint);
             }
@@ -526,8 +527,8 @@ namespace Router
             assert(bridgeLenDx <= totalLen && bridgeLenDy <= totalLen);
 
             // 优先走直线
-            uint dxDist = totalLen * Map::GENERAL_COST + bridgeLenDx * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDx, targetPt) : 0);
-            uint dyDist = totalLen * Map::GENERAL_COST + bridgeLenDy * (Map::BRIDGE_COST - Map::GENERAL_COST) + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDy, targetPt) : 0);
+            uint dxDist = totalLen * Map::GENERAL_COST + bridgeLenDx * Map::BRIDGE_COST - bridgeLenDx * Map::GENERAL_COST + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDx, targetPt) : 0);
+            uint dyDist = totalLen * Map::GENERAL_COST + bridgeLenDy * Map::BRIDGE_COST - bridgeLenDx * Map::GENERAL_COST + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDy, targetPt) : 0);
             midPoint = dxDist > dyDist ? midPointDy : midPointDx;
 
             // 暂时认为cost是桥和普通模式
@@ -550,18 +551,18 @@ namespace Router
             if (!map_.startFindPath(sourcePt, targetPt))
                 return CoordinateList();
 
-            auto nodeComp = [](Node* a, Node* b) { return a->getScore() > b->getScore(); };
-            // 定义优先队列，按f值从小到大排序; 小顶堆
-            std::priority_queue<Node*, std::vector<Node*>, std::function<bool(Node*, Node*)>> openQueue(nodeComp);
+            auto nodeComp = [](Node* a, Node* b) { return a->getScore() < b->getScore(); };
+            // 按f值从小到大排序
+            //std::priority_queue<Node*, std::vector<Node*>, std::function<bool(Node*, Node*)>> openQueue(nodeComp);
+            NodeSet openQueue(nodeComp);
 
             auto setComp = [](Node* a, Node* b) { return b->coordinates < a->coordinates; };
             NodeSet closedSet(setComp);
-            NodeSet openSet(setComp);
             Node* startNode = new(std::nothrow) Node(sourcePt);
             if (startNode == nullptr) {
                 return CoordinateList();
             }
-            openQueue.push(startNode);
+            openQueue.insert(startNode);//openQueue.push(startNode);
 
             auto addNextPoint = [&](uint i, const Point2i& next, Node* parent) -> Node* {
                 assert(parent != nullptr);
@@ -587,9 +588,8 @@ namespace Router
                 uint totalCost = parent->G + ((i < 4) ? 10 : 14) * extraCost / 10
                     + (directPrefer_ ? 10 * calcNodeExtraCost(parent, next, targetPt) : 0);
 
-                // openset 不是太大，简单搜索，如果很大，考虑使用额外容器来加速
                 Node* successor = nullptr;
-                for (auto n : openSet) {
+                for (auto n : openQueue) {
                     if (n->coordinates == next) {
                         successor = n;
                         break;
@@ -601,14 +601,13 @@ namespace Router
                         return nullptr;
                     successor->G = totalCost;
                     successor->H = heuristic(successor->coordinates, targetPt) * Map::GENERAL_COST /2;
-                    openQueue.push(successor);
-                    openSet.insert(successor);
+                    openQueue.insert(successor);//openQueue.push(successor);
                 }
                 else if (totalCost < successor->G) {
+                    openQueue.erase(successor);               // update order
                     successor->parent = parent;
-                    successor->G = totalCost;
-//                    openQueue.erase(successor);               // update order
-//                    openQueue.insert(successor);
+                    successor->G = totalCost;                    
+                    openQueue.insert(successor);
                 }
                 return successor;
             };
@@ -629,20 +628,21 @@ namespace Router
                     }
                 }
                 if (nearestNode != nullptr) {
+                    openQueue.erase(nearestNode);    
                     nearestNode->G = 0;
+                    openQueue.insert(nearestNode);    
                 }
             }
 
             Node* current = nullptr;
             while (!openQueue.empty()) {
-                current = openQueue.top();
+                current = *openQueue.begin();//current = openQueue.top();
                 if (current->coordinates == targetPt) {
                     break;
                 }
 
                 closedSet.insert(current);
-                openSet.erase(current);
-				openQueue.pop();
+				openQueue.erase(current);//openQueue.pop();
 
                 Point2i jp;                
                 for (uint i = 0; i < directions; ++i) {
@@ -689,7 +689,7 @@ namespace Router
 
                 if (oriPath.size() > 2) {
                     path.push_back(oriPath[0]);
-                    int i = 2;
+                    std::size_t i = 2;
                     for (; i < oriPath.size(); ++i) {
                         if (oriPath[i].x != oriPath[i - 2].x && oriPath[i].y != oriPath[i - 2].y) {
                             path.push_back(oriPath[i - 1]);
@@ -702,13 +702,12 @@ namespace Router
                 }
             }
 
-			while (!openQueue.empty())
-            {
-                delete openQueue.top();
-                openQueue.pop();
-            }
-            //for(auto n : openQueue)
-              //  delete n;
+			//while (!openQueue.empty()) {
+            //    delete openQueue.top();
+            //    openQueue.pop();
+            //}
+            for(auto n : openQueue)
+                delete n;
             for (auto n : closedSet)
                 delete n;
 
