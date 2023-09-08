@@ -13,10 +13,8 @@
 #include <iostream>
 #include <assert.h>
 
-/// @brief 基础的jps算法需要走斜线
+/// @brief 
 /// 考虑到我们有管廊/管网这一类捷径，可以贪心的方式直接走下去
-/// 如果有空切的地方，直线扫描方式来定位, 朝向终点，前后上下直线搜索
-/// ? 并找到边界点作为跳点
 namespace Router
 {
     using uint = unsigned int;
@@ -98,7 +96,7 @@ namespace Router
         static const int MAX_WORLD_LEN = 100000;
     public:
         Map() : baseAlignPoint_({ 0,0 }) {}
-        ~Map() { delete []wallsBuffer_; }
+        ~Map() { delete[]wallsBuffer_; }
 
         bool baseCollision(const Point2i& nextCoord) {
             return  nextCoord.x < 0 || nextCoord.x >= worldSize_.x ||
@@ -413,7 +411,7 @@ namespace Router
     private:
         // 有待优化, 使用set节省空间，但是查找速度略慢      下面记录的都是点阵
         std::set<Point2i>       walls_;
-        char*                   wallsBuffer_ = nullptr; // 使用这个buffer，速度比直接使用walls_速度提升一倍
+        char* wallsBuffer_ = nullptr; // 使用这个buffer，速度比直接使用walls_速度提升一倍
         std::set<Point2i>       paths_;             // 如果规划多条线路，线路可以交叉，但是不可以有重复的段
         std::map<int, Bridge>   bridges_;
         int                     bridgeId_ = 0;
@@ -449,35 +447,6 @@ namespace Router
         void setHeuristic(HeuristicFunction heuristic_) { heuristic = heuristic_; }
 
         bool isBridge(const Point2i& pt) { return map_.isBridge(pt); }
-
-        /// @brief 目前的模式，有重复检测的问题，另外baseCollision效率太低了； 
-        /// 后面考虑预处理的方式，把跳点先检测出来
-        /// @param current 
-        /// @param dir 
-        /// @param jp       the jump point found
-        /// @return 
-        bool findJumpPoint_dynamic(Node* current, const Vec2i& dir, Point2i& jp) {
-            jp = current->coordinates + dir;
-            while (true)
-            {
-                if (map_.baseCollision(jp)) {
-                    break;
-                }
-
-                /// if jump piont, 点或者矩形的四角斜方向的点，认为是跳点 
-                Vec2i vertical({ dir.y, dir.x });
-                if ((!map_.baseCollision(jp + dir) && !map_.baseCollision(jp + vertical) && map_.baseCollision(jp + dir + vertical)) ||
-                    (!map_.baseCollision(jp + dir) && !map_.baseCollision(jp - vertical) && map_.baseCollision(jp + dir - vertical)) ||
-                    (!map_.baseCollision(jp + vertical) && map_.baseCollision(jp - dir + vertical)) ||
-                    (!map_.baseCollision(jp - vertical) && map_.baseCollision(jp - dir - vertical))
-                    )
-                    return true;
-
-                jp = jp + dir;
-            };
-
-            return false;
-        }
 
         uint findBridgeSegLen(const Point2i& start, const Point2i& end)
         {
@@ -527,8 +496,8 @@ namespace Router
             assert(bridgeLenDx <= totalLen && bridgeLenDy <= totalLen);
 
             // 优先走直线
-            uint dxDist = totalLen * Map::GENERAL_COST + bridgeLenDx * Map::BRIDGE_COST - bridgeLenDx * Map::GENERAL_COST + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDx, targetPt) : 0);
-            uint dyDist = totalLen * Map::GENERAL_COST + bridgeLenDy * Map::BRIDGE_COST - bridgeLenDx * Map::GENERAL_COST + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDy, targetPt) : 0);
+            uint dxDist = (totalLen - bridgeLenDx)* Map::GENERAL_COST + bridgeLenDx * Map::BRIDGE_COST + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDx, targetPt) : 0);
+            uint dyDist = (totalLen - bridgeLenDy)* Map::GENERAL_COST + bridgeLenDy * Map::BRIDGE_COST + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDy, targetPt) : 0);
             midPoint = dxDist > dyDist ? midPointDy : midPointDx;
 
             // 暂时认为cost是桥和普通模式
@@ -552,8 +521,6 @@ namespace Router
                 return CoordinateList();
 
             auto nodeComp = [](Node* a, Node* b) { return a->getScore() < b->getScore(); };
-            // 按f值从小到大排序
-            //std::priority_queue<Node*, std::vector<Node*>, std::function<bool(Node*, Node*)>> openQueue(nodeComp);
             NodeSet openQueue(nodeComp);
 
             auto setComp = [](Node* a, Node* b) { return b->coordinates < a->coordinates; };
@@ -597,16 +564,16 @@ namespace Router
                 }
                 if (successor == nullptr) {
                     successor = new(std::nothrow) Node(next, parent);
-                    if (successor ==nullptr)
+                    if (successor == nullptr)
                         return nullptr;
                     successor->G = totalCost;
-                    successor->H = heuristic(successor->coordinates, targetPt) * Map::GENERAL_COST /2;
+                    successor->H = heuristic(successor->coordinates, targetPt) * Map::GENERAL_COST / 2;
                     openQueue.insert(successor);//openQueue.push(successor);
                 }
                 else if (totalCost < successor->G) {
                     openQueue.erase(successor);               // update order
                     successor->parent = parent;
-                    successor->G = totalCost;                    
+                    successor->G = totalCost;
                     openQueue.insert(successor);
                 }
                 return successor;
@@ -628,9 +595,9 @@ namespace Router
                     }
                 }
                 if (nearestNode != nullptr) {
-                    openQueue.erase(nearestNode);    
+                    openQueue.erase(nearestNode);
                     nearestNode->G = 0;
-                    openQueue.insert(nearestNode);    
+                    openQueue.insert(nearestNode);
                 }
             }
 
@@ -642,9 +609,9 @@ namespace Router
                 }
 
                 closedSet.insert(current);
-				openQueue.erase(current);//openQueue.pop();
+                openQueue.erase(current);//openQueue.pop();
 
-                Point2i jp;                
+                Point2i jp;
                 for (uint i = 0; i < directions; ++i) {
                     if (i < 4) {
                         if (isBridge(current->coordinates)) {
@@ -702,11 +669,8 @@ namespace Router
                 }
             }
 
-			//while (!openQueue.empty()) {
-            //    delete openQueue.top();
-            //    openQueue.pop();
-            //}
-            for(auto n : openQueue)
+
+            for (auto n : openQueue)
                 delete n;
             for (auto n : closedSet)
                 delete n;
@@ -720,7 +684,7 @@ namespace Router
             auto it = nodes_.find(&node);
             return it == nodes_.end() ? nullptr : *it;
         }
-        
+
         // 尽量走直线
         int calcNodeExtraCost(const Node* currNode, const Point2i& nextNode, const Point2i& target) {
             // 第一个点或直线点
