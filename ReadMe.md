@@ -30,11 +30,11 @@ int main()
 ![](http://i.imgur.com/7ZH2A0d.png)
 
 
-使用优先队列/ set 替代原来的数据结构，速度飙升。 目前debug模式下， 240/240 寻路，643ms
+使用 set 替代原来的数据结构，速度飙升。 目前debug模式下， 240/240 寻路，643ms
 
 https://blog.csdn.net/wenyuan65/article/details/81587768  这篇文章有启发
 
 不过，为提高速度，必须参考jps是思想
 
-后续可以调整H的比重来达到更好的效果
-
+但是jps必须可以走斜线。
+所以本项目自创了相关的算法。 目前效果良好。

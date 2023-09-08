@@ -496,12 +496,12 @@ namespace Router
             assert(bridgeLenDx <= totalLen && bridgeLenDy <= totalLen);
 
             // 优先走直线
-            uint dxDist = (totalLen - bridgeLenDx)* Map::GENERAL_COST + bridgeLenDx * Map::BRIDGE_COST + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDx, targetPt) : 0);
-            uint dyDist = (totalLen - bridgeLenDy)* Map::GENERAL_COST + bridgeLenDy * Map::BRIDGE_COST + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDy, targetPt) : 0);
+            uint dxDist = (totalLen - bridgeLenDx)* Map::GENERAL_COST + bridgeLenDx * Map::BRIDGE_COST;
+            uint dyDist = (totalLen - bridgeLenDy)* Map::GENERAL_COST + bridgeLenDy * Map::BRIDGE_COST;
             midPoint = dxDist > dyDist ? midPointDy : midPointDx;
 
             // 暂时认为cost是桥和普通模式
-            extraCost = std::min(dxDist, dyDist);
+            extraCost = std::min(dxDist, dyDist) + (directPrefer_ ? calcNodeExtraCost(curNode, midPointDx, targetPt) : 0);
 
             return dir.x != 0 && dir.y != 0;
         }
